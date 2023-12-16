@@ -4,7 +4,7 @@ import express, { json, urlencoded } from 'express'
 const app = express()
 import {ResultResponse, router as auth, isAuth} from './controllers/auth'
 import { pool as db } from './classes/db'
-const PORT = 3000
+const PORT = 4020
 
 app.use(urlencoded({ extended: true }))
 app.use(json())
@@ -44,13 +44,76 @@ app.post("/thought/new", isAuth , async(req:any,res)=>{
         return res.status(400).json({result: "FAIL", data: "Missing all required input fields"})
     }
     const now = Date.now() / 1000;
-    const thought = await db.query(`INSERT INTO thoughts (title,body,date,owner,viewed) VALUES ($1,$2,to_timestamp(${now}), ${req.authorized.id}, false);`,[title,body])
-    res.status(200).json(result)
-}
+    try{
+        const thought = await db.query(`INSERT INTO thoughts (title,body,date,owner,viewed) VALUES ($1,$2,to_timestamp(${now}), ${req.authorized.id}, false);`,[title,body])
+        res.status(200).json(result)
+    }catch(err){
+        console.log(err)
+        res.status(403).json({result:"FAIL",data:"There was an error"})
+    }
+    }
 })
 //allow user to delete thought from thought database
-app.delete("/thought/delete",(req,res)=>{
-    
+app.delete("/thought/delete",isAuth, async(req:any,res)=>{
+    const result:ResultResponse = {
+        result: "ok",
+        data:null
+    }
+    if(req.authorized){
+        const {id} = req.body
+        console.log("Deleting thought with ID ", id)
+        try{
+            await db.query(`DELETE FROM thoughts WHERE id=${id};`)
+            result.data = "Success"
+        }catch(err){
+            console.log(err)
+            result.result = "FAIL"
+            result.data = "Failed to delete"
+        }
+        return res.status(200).json(result)
+    }
+})
+//allow user to update thought in thought database
+app.post("/thought/edit",isAuth, async(req:any,res)=>{
+    const result:ResultResponse = {
+        result: "ok",
+        data:null
+    }
+    if(req.authorized){
+        const {id, title, body} = req.body
+        console.log("editing thought with ID ", id)
+        console.log("Updated title and body: ", title, "\n", body)
+        try{
+            await db.query(`UPDATE thoughts SET title=$1, body=$2 WHERE id=${id};`, [title, body])
+            result.data = "Success"
+        }catch(err){
+            console.log(err)
+            result.result = "FAIL"
+            result.data = "Failed to update"
+        }
+        return res.status(200).json(result)
+    }
+})
+
+//Mark a thought as viewed when displayed to user
+app.post("/thought/viewed",isAuth, async(req:any,res)=>{
+    const result:ResultResponse = {
+        result: "ok",
+        data:null
+    }
+    if(req.authorized){
+        const {id} = req.body
+        console.log("Marking viewed thought with ID ", id)
+        try{
+            await db.query(`UPDATE thoughts SET viewed=true WHERE id=${id};`)
+            result.data = "Success"
+        }catch(err){
+            console.log(err)
+            result.result = "FAIL"
+            result.data = "Failed to update"
+        }
+        return res.status(200).json(result)
+    }
 })
 
 app.listen(PORT, () => {console.log("App listening...")})
